@@ -16,18 +16,25 @@ function getImage(url, req, res) {
     async function get (auth) {
         const browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            landscape: true,
-            printBackground: true
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
-        await page.goto(url);
+        await page.goto(url, {
+            waitUntil: 'networkidle'
+        });
         await page.evaluate(jwt => {
             localStorage.setItem('full-auth', jwt);
             localStorage.setItem('userName', jwt);
         }, auth);
         await page.reload();
-        await page.pdf({path: 'public/example.pdf', format: 'A4'});
+        await page.goto(url);
+        await page.pdf({
+            path: 'public/example.pdf',
+            format: 'A4',
+            landscape: true,
+            printBackground: true,
+            displayHeaderFooter: true
+        });
         await browser.close();
     }
     get(Auth).then(v => {
