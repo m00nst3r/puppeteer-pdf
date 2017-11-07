@@ -11,16 +11,25 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 storage.initSync();
 
-function getImage(url, req, res) {
+function getPdf(url, req, res) {
     const Auth = req.headers.authorization;
-    async function get (auth) {
+    const {settings} = req.body;
+    const config = typeof settings !== "undefined" ? settings : null;
+    async function get (auth, config) {
+        const options = {
+            waitUntil: config.waitUntil || 'load',
+            format:  config.format || 'A4',
+            landscape: config.landscape || true,
+            printBackground: config.printBackground || true,
+            displayHeaderFooter: config.displayHeaderFooter || true
+        };
         const browser = await puppeteer.launch({
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
         await page.goto(url, {
-            waitUntil: 'networkidle'
+            waitUntil: options.waitUntil
         });
         await page.evaluate(jwt => {
             localStorage.setItem('full-auth', jwt);
@@ -30,14 +39,14 @@ function getImage(url, req, res) {
         await page.goto(url);
         await page.pdf({
             path: 'public/example.pdf',
-            format: 'A4',
-            landscape: true,
-            printBackground: true,
-            displayHeaderFooter: true
+            format: options.format,
+            landscape: options.landscape,
+            printBackground: options.printBackground,
+            displayHeaderFooter: options.displayHeaderFooter
         });
         await browser.close();
     }
-    get(Auth).then(v => {
+    get(Auth, config).then(v => {
         res.send('cool')
     }).catch(err => {
         console.log(err);
@@ -46,10 +55,8 @@ function getImage(url, req, res) {
 }
 
 app.post('/', (req, res) => {
-    // console.log(req);
-    // console.log(req.headers.authorization);
     if (req.body.url) {
-        getImage(req.body.url, req, res);
+        getPdf(req.body.url, req, res);
     } else {
         req.send('oops')
     }
