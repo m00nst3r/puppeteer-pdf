@@ -1,0 +1,4 @@
+*.pdf
+*.png
+Dockerfile
+node_modules
