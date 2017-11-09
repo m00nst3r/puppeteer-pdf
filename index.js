@@ -10,12 +10,35 @@ const app = express();
 app.use((req, res, next) =>{
     res.header("Access-Control-Allow-Origin", "*");
     res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
     next();
 });
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 storage.initSync();
+
+function generatePdf(req, res) {
+    async function get() {
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+        await page.goto('http://localhost:3000', {waitUntil: 'networkidle'});
+        await page.waitForNavigation({waitUntil: 'networkidle'});
+        await page.pdf({
+            path: 'hn.pdf',
+            format: 'letter'
+        });
+
+        await browser.close();
+    }
+    get().then(v => {
+        res.json({"status": "ok"})
+    }).catch(err => {
+        console.log(err);
+        res.send('error');
+    })
+}
 
 function getPdf(url, req, res) {
     const Auth = req.headers.authorization;
@@ -25,7 +48,7 @@ function getPdf(url, req, res) {
         const options = {
             waitUntil: config.waitUntil || 'load',
             format:  config.format || 'A4',
-            landscape: config.landscape || true,
+            landscape: config.landscape || false,
             printBackground: config.printBackground || true,
             displayHeaderFooter: config.displayHeaderFooter || true
         };
@@ -34,15 +57,13 @@ function getPdf(url, req, res) {
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
-        await page.goto(url, {
-            waitUntil: options.waitUntil
-        });
+        await page.goto(url, {waitUntil: 'networkidle'});
         await page.evaluate(jwt => {
             localStorage.setItem('full-auth', jwt);
             localStorage.setItem('userName', jwt);
         }, auth);
-        await page.reload();
-        await page.goto(url);
+        await page.reload({waitUntil: 'networkidle'});
+        await page.waitForNavigation({waitUntil: 'networkidle'});
         await page.pdf({
             path: 'public/example.pdf',
             format: options.format,
@@ -61,30 +82,42 @@ function getPdf(url, req, res) {
 }
 
 app.post('/', (req, res) => {
+    console.log(req.body);
     if (req.body.url) {
         getPdf(req.body.url, req, res);
+        // generatePdf(req, res);
     } else {
-        req.send('oops')
+        res.send('oops')
     }
 });
 
-app.get('/', (req, res) => {
-    async function get () {
-        const browser = await puppeteer.launch({
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
-        await page.goto('http://localhost:3000');
-        await page.pdf({path: 'public/example.pdf', format: 'A4'});
-        await browser.close();
-    }
-
-    get().then(v => {
-        res.send('cool')
-    }).catch(err => {
-        console.log(err);
-        res.send('error');
-    })
+app.get('/data', (req, res) => {
+    setTimeout(() => {
+        res.json({
+            "response": [
+                {
+                    "id": 1,
+                    "name": "one",
+                    "description": "description 1"
+                },
+                {
+                    "id": 2,
+                    "name": "two",
+                    "description": "description 1"
+                },
+                {
+                    "id": 3,
+                    "name": "three",
+                    "description": "description 1"
+                },
+                {
+                    "id": 4,
+                    "name": "four",
+                    "description": "description 1"
+                }
+            ]
+        })
+    }, 10000);
 });
 
 app.use(express.static('public'));
