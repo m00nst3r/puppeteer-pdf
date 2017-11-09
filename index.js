@@ -54,16 +54,20 @@ function getPdf(url, req, res) {
         };
         const browser = await puppeteer.launch({
             headless: true,
+            timeout: 0,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
-        await page.goto(url, {waitUntil: 'networkidle'});
+        await page.goto(url, {
+            waitUntil: 'networkidle',
+            timeout: 0
+        });
         await page.evaluate(jwt => {
             localStorage.setItem('full-auth', jwt);
             localStorage.setItem('userName', jwt);
         }, auth);
-        await page.reload({waitUntil: 'networkidle'});
-        await page.waitForNavigation({waitUntil: 'networkidle'});
+        await page.reload({waitUntil: 'networkidle', timeout: 0});
+        await page.waitForNavigation({waitUntil: 'networkidle', timeout: 0});
         await page.pdf({
             path: 'public/example.pdf',
             format: options.format,
@@ -117,7 +121,7 @@ app.get('/data', (req, res) => {
                 }
             ]
         })
-    }, 10000);
+    }, 31000);
 });
 
 app.use(express.static('public'));
