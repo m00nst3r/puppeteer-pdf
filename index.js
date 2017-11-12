@@ -17,81 +17,69 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 storage.initSync();
 
-function generatePdf(req, res) {
-    async function get() {
-        const browser = await puppeteer.launch({
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
-        await page.goto('http://localhost:3000', {waitUntil: 'networkidle'});
-        await page.waitForNavigation({waitUntil: 'networkidle'});
-        await page.pdf({
-            path: 'hn.pdf',
-            format: 'letter'
-        });
-
-        await browser.close();
-    }
-    get().then(v => {
-        res.json({"status": "ok"})
-    }).catch(err => {
-        console.log(err);
-        res.send('error');
-    })
-}
-
-function getPdf(url, req, res) {
+function generatePdf(url, req, res) {
     const Auth = req.headers.authorization;
     const {settings} = req.body;
     const config = typeof settings !== "undefined" ? settings : null;
     async function get (auth, config) {
         const options = {
-            waitUntil: config.waitUntil || 'load',
+            waitUntil: 'networkidle',
             format:  config.format || 'A4',
-            landscape: config.landscape || false,
-            printBackground: config.printBackground || true,
-            displayHeaderFooter: config.displayHeaderFooter || true
+            landscape: typeof config.landscape  !== "undefined" ? config.landscape : false,
+            printBackground: typeof config.printBackground  !== "undefined" ? config.printBackground : true,
+            displayHeaderFooter: typeof config.displayHeaderFooter !== "undefined" ? config.displayHeaderFooter : true,
+            timeout: 0,
+            headless: true
         };
         const browser = await puppeteer.launch({
-            headless: true,
-            timeout: 0,
+            headless: options.headless,
+            timeout: options.timeout,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
-        await page.goto(url, {
-            waitUntil: 'networkidle',
-            timeout: 0
-        });
+        await page.setViewport({width: 1280, height: 0, deviceScaleFactor: 1});        
+        await page.goto(url, {waitUntil: options.waitUntil, timeout: options.timeout});
         await page.evaluate(jwt => {
             localStorage.setItem('full-auth', jwt);
             localStorage.setItem('userName', jwt);
         }, auth);
-        await page.reload({waitUntil: 'networkidle', timeout: 0});
-        await page.waitForNavigation({waitUntil: 'networkidle', timeout: 0});
+        const dimensions = await page.evaluate(() => {
+            return {
+                width: document.documentElement.clientWidth,
+                height: document.documentElement.clientHeight,
+                deviceScaleFactor: window.devicePixelRatio
+            };
+        });
+        console.log(dimensions);
+        await page.reload({waitUntil: options.waitUntil, timeout: options.timeout});
+        await page.waitForNavigation({waitUntil: options.waitUntil, timeout: options.timeout});
         await page.pdf({
             path: 'public/example.pdf',
-            format: options.format,
+            // format: options.format,
+            scale: 1,
             landscape: options.landscape,
             printBackground: options.printBackground,
-            displayHeaderFooter: options.displayHeaderFooter
+            displayHeaderFooter: options.displayHeaderFooter,
+            height: dimensions.height,
+            width: dimensions.width
         });
         await browser.close();
     }
     get(Auth, config).then(v => {
-        res.send('cool')
+        console.log('pdf generated');
+        res.json({"response": "ok"})
     }).catch(err => {
         console.log(err);
-        res.send('error');
+        res.json({"response": "error"});
     })
 }
 
 app.post('/', (req, res) => {
     console.log(req.body);
     if (req.body.url) {
-        getPdf(req.body.url, req, res);
-        // generatePdf(req, res);
+        generatePdf(req.body.url, req, res);
     } else {
-        res.send('oops')
+        res.json({'response': 'no url'})
     }
 });
 
@@ -121,7 +109,7 @@ app.get('/data', (req, res) => {
                 }
             ]
         })
-    }, 31000);
+    }, 1000);
 });
 
 app.use(express.static('public'));
