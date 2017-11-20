@@ -2,7 +2,6 @@ const puppeteer = require('puppeteer');
 const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
-const storage = require('node-persist');
 const PORT = process.env.PORT || 3333;
 
 const app = express();
@@ -10,12 +9,11 @@ const app = express();
 app.use((req, res, next) =>{
     res.header("Access-Control-Allow-Origin", "*");
     res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Disposition");
     next();
 });
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-storage.initSync();
 
 function generatePdf(url, req, res) {
     const Auth = req.headers.authorization;
@@ -34,7 +32,7 @@ function generatePdf(url, req, res) {
         };
         const browser = await puppeteer.launch({
             headless: true,
-            timeout: options.networkSetting.timeout,
+            timeout: 0,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
@@ -43,10 +41,10 @@ function generatePdf(url, req, res) {
             height: config.pageSize.height || 0,
             deviceScaleFactor: 1
         });
-        await page.goto(url, options.networkSetting);
+        await page.goto(url);
         await page.evaluate(jwt => {
-            localStorage.setItem('full-auth', jwt);
-            localStorage.setItem('userName', jwt);
+            window.localStorage.setItem('full-auth', jwt);
+            window.localStorage.setItem('userName', jwt);
         }, auth);
         const dimensions = await page.evaluate(() => {
             return {
@@ -57,7 +55,10 @@ function generatePdf(url, req, res) {
         });
         console.log(dimensions);
         await page.reload();
-        await page.waitForNavigation(options.networkSetting);
+        await page.waitForNavigation({
+            timeout: 0,
+            waitUntil: 'networkidle'
+        });
         await page.pdf({
             path: 'public/example.pdf',
             format: config.format || 'A4',
@@ -72,9 +73,17 @@ function generatePdf(url, req, res) {
         await browser.close();
     }
     get(Auth, config).then(v => {
-        console.log('pdf generated');
         console.log(`request finished at ${new Date()}`);
-        res.json({"response": "ok"})
+        console.log('pdf generated');
+        // res.json({"response": "ok"});
+        res.download('public/example.pdf', 'example.pdf', (err) => {
+            if (err) {
+                console.log(err);
+            } else {
+                console.log('cool');
+            }
+        });
+        console.log('FINISHED');
     }).catch(err => {
         console.log(`request failed at ${new Date()}`);
         console.log(err);
